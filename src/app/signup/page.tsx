@@ -1,0 +1,238 @@
+"use client";
+
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import type { Department } from "@/types/db";
+
+type SelfRole = "STUDENT" | "FACULTY" | "ALUMNI";
+
+export default function SignupPage() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<SelfRole>("STUDENT");
+  const [departmentId, setDepartmentId] = useState("");
+  const [rollNumber, setRollNumber] = useState("");
+  const [year, setYear] = useState("1");
+  const [section, setSection] = useState("A");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("departments")
+      .select("*")
+      .order("name")
+      .then(({ data }) => {
+        if (data) {
+          setDepartments(data);
+          if (data.length > 0) setDepartmentId(data[0].id);
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName, role } },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (!data.session) {
+      setError(
+        "Account created. Email confirmation is required — check your inbox before signing in.",
+      );
+      setLoading(false);
+      return;
+    }
+
+    if (role === "STUDENT") {
+      const res = await fetch("/api/auth/complete-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "STUDENT",
+          departmentId,
+          rollNumber,
+          year: Number(year),
+          section,
+          admissionYear: new Date().getFullYear(),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Could not save student details.");
+        setLoading(false);
+        return;
+      }
+    } else if (role === "FACULTY") {
+      const res = await fetch("/api/auth/complete-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "FACULTY", departmentId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Could not save faculty details.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    setLoading(false);
+    router.replace("/dashboard");
+    router.refresh();
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+        <h1 className="text-xl font-semibold text-slate-900">Create your account</h1>
+        <p className="mt-1 text-sm text-slate-500">Join Smart Campus</p>
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">I am a</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as SelfRole)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="STUDENT">Student</option>
+              <option value="FACULTY">Faculty</option>
+              <option value="ALUMNI">Alumni</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Full name</label>
+            <input
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Password</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          {(role === "STUDENT" || role === "FACULTY") && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Department</label>
+              <select
+                required
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {role === "STUDENT" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Roll number</label>
+                <input
+                  required
+                  value={rollNumber}
+                  onChange={(e) => setRollNumber(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Year</label>
+                  <select
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  >
+                    {[1, 2, 3, 4].map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Section</label>
+                  <input
+                    required
+                    value={section}
+                    onChange={(e) => setSection(e.target.value.toUpperCase())}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {error && (
+            <p role="alert" className="text-sm text-red-600">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-md bg-slate-900 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            {loading ? "Creating account..." : "Sign up"}
+          </button>
+        </form>
+
+        <p className="mt-4 text-center text-sm text-slate-500">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-slate-900 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </main>
+  );
+}
