@@ -43,60 +43,35 @@ export default function SignupPage() {
     setError(null);
     setLoading(true);
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, role } },
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password,
+        fullName,
+        role,
+        departmentId,
+        rollNumber,
+        year: Number(year),
+        section,
+        admissionYear: new Date().getFullYear(),
+      }),
     });
 
-    if (signUpError) {
-      setError(signUpError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!data.session) {
-      setError(
-        "Account created. Email confirmation is required — check your inbox before signing in.",
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (role === "STUDENT") {
-      const res = await fetch("/api/auth/complete-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: "STUDENT",
-          departmentId,
-          rollNumber,
-          year: Number(year),
-          section,
-          admissionYear: new Date().getFullYear(),
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Could not save student details.");
-        setLoading(false);
-        return;
-      }
-    } else if (role === "FACULTY") {
-      const res = await fetch("/api/auth/complete-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "FACULTY", departmentId }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Could not save faculty details.");
-        setLoading(false);
-        return;
-      }
-    }
-
+    const body = await res.json().catch(() => ({}));
     setLoading(false);
+
+    if (!res.ok) {
+      setError(body.error ?? "Could not create account.");
+      return;
+    }
+
+    if (body.needsConfirmation) {
+      setError(body.error);
+      return;
+    }
+
     router.replace("/dashboard");
     router.refresh();
   }
