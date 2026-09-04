@@ -227,6 +227,16 @@ create policy "subjects_select_all" on subjects for select using (true);
 drop policy if exists "faculty_subjects_select_all" on faculty_subjects;
 create policy "faculty_subjects_select_all" on faculty_subjects for select using (true);
 
+-- faculty_subjects: a faculty member may assign themself to teach a class.
+-- (Stand-in for a future admin/HOD timetable-assignment UI.)
+drop policy if exists "faculty_subjects_insert_own" on faculty_subjects;
+create policy "faculty_subjects_insert_own" on faculty_subjects for insert
+  with check (faculty_id = auth.uid() and auth_role() = 'FACULTY');
+
+drop policy if exists "faculty_subjects_delete_own" on faculty_subjects;
+create policy "faculty_subjects_delete_own" on faculty_subjects for delete
+  using (faculty_id = auth.uid() and auth_role() = 'FACULTY');
+
 -- students: student sees own row; staff sees all.
 drop policy if exists "students_select" on students;
 create policy "students_select" on students for select
@@ -254,6 +264,12 @@ create policy "qr_select_own_or_staff" on qr_identities for select
 drop policy if exists "enrollments_select" on enrollments;
 create policy "enrollments_select" on enrollments for select
   using (student_id = auth.uid() or auth_role() in ('ADMIN', 'HOD', 'FACULTY'));
+
+-- enrollments: a student may enroll themself in a subject (e.g. auto-enrolled
+-- into their department's subjects at signup).
+drop policy if exists "enrollments_insert_own" on enrollments;
+create policy "enrollments_insert_own" on enrollments for insert
+  with check (student_id = auth.uid() and auth_role() = 'STUDENT');
 
 -- attendance: student reads own records; faculty reads/writes for their subjects; admin/HOD read all.
 drop policy if exists "attendance_select" on attendance;
