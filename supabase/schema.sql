@@ -223,6 +223,28 @@ drop policy if exists "profiles_update_own" on profiles;
 create policy "profiles_update_own" on profiles for update
   using (id = auth.uid());
 
+-- A user may update their own row (e.g. full_name), but never their own
+-- role/id/email through a normal session — that would be a privilege
+-- escalation. auth.role() is NULL for direct SQL (the Supabase SQL
+-- Editor, used today to promote admins) and 'service_role' for admin-API
+-- calls, so only ordinary 'authenticated' sessions are restricted here.
+create or replace function prevent_role_self_escalation() returns trigger
+language plpgsql as $$
+begin
+  if auth.role() = 'authenticated'
+    and (new.role <> old.role or new.id <> old.id or new.email <> old.email)
+  then
+    raise exception 'Cannot modify role, id, or email directly';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_restrict_update on profiles;
+create trigger profiles_restrict_update
+  before update on profiles
+  for each row execute function prevent_role_self_escalation();
+
 -- departments / subjects: readable by any authenticated user.
 drop policy if exists "departments_select_all" on departments;
 create policy "departments_select_all" on departments for select using (true);
