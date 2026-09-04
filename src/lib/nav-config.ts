@@ -27,6 +27,8 @@ export const NAV_ITEMS: Record<AppRole, NavItem[]> = {
   ADMIN: [
     { label: "Overview", href: "/dashboard/admin" },
     { label: "Users", href: "/dashboard/admin/users" },
+    { label: "Timetable", href: "/dashboard/admin/timetable" },
+    { label: "Fees", href: "/dashboard/admin/fees" },
     { label: "Departments", href: "/dashboard/admin/departments" },
     { label: "Analytics", href: "/dashboard/admin/analytics" },
   ],

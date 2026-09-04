@@ -208,10 +208,16 @@ alter table timetable enable row level security;
 alter table fees enable row level security;
 alter table fee_transactions enable row level security;
 
--- profiles: everyone can read their own; admins/HOD read all.
+-- profiles: everyone can read their own; admins/HOD/faculty read all;
+-- everyone can read FACULTY profiles (campus faculty directory, and so
+-- students can see who teaches their classes on timetables/rosters).
 drop policy if exists "profiles_select_own_or_staff" on profiles;
 create policy "profiles_select_own_or_staff" on profiles for select
-  using (id = auth.uid() or auth_role() in ('ADMIN', 'HOD', 'FACULTY'));
+  using (
+    id = auth.uid()
+    or auth_role() in ('ADMIN', 'HOD', 'FACULTY')
+    or role = 'FACULTY'
+  );
 
 drop policy if exists "profiles_update_own" on profiles;
 create policy "profiles_update_own" on profiles for update
@@ -368,3 +374,17 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- ============================================================
+-- STORAGE: notes bucket
+-- Private bucket — downloads are served through an API route that
+-- checks the `notes` table's RLS before generating a signed URL, so no
+-- public SELECT policy on storage.objects is needed.
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('notes', 'notes', false)
+on conflict (id) do nothing;
+
+drop policy if exists "notes_bucket_insert_faculty" on storage.objects;
+create policy "notes_bucket_insert_faculty" on storage.objects for insert
+  with check (bucket_id = 'notes' and auth_role() = 'FACULTY');
