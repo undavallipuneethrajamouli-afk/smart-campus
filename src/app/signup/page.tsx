@@ -78,9 +78,12 @@ export default function SignupPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-1.5 bg-gradient-to-r from-brand-600 to-brand-red" />
+        <div className="p-8">
         <h1 className="text-xl font-semibold text-slate-900">Create your account</h1>
-        <p className="mt-1 text-sm text-slate-500">Join Smart Campus</p>
+        <p className="text-xs font-medium text-brand-600">Godavari Global University</p>
+        <p className="mt-3 text-sm text-slate-500">Join Smart Campus</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
@@ -195,7 +198,7 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-slate-900 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="w-full rounded-md bg-brand-600 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {loading ? "Creating account..." : "Sign up"}
           </button>
@@ -203,10 +206,11 @@ export default function SignupPage() {
 
         <p className="mt-4 text-center text-sm text-slate-500">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-slate-900 hover:underline">
+          <Link href="/login" className="font-medium text-brand-600 hover:underline">
             Sign in
           </Link>
         </p>
+        </div>
       </div>
     </main>
   );

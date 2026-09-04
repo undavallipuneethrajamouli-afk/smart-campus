@@ -11,6 +11,19 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Godavari Global University brand colors, sampled from the official logo */
+  --color-brand-50: #f3f0f9;
+  --color-brand-100: #e6dff2;
+  --color-brand-200: #c9b8e2;
+  --color-brand-300: #a98fd0;
+  --color-brand-400: #7d5bb3;
+  --color-brand-500: #5a3a95;
+  --color-brand-600: #4a2c82;
+  --color-brand-700: #3c2369;
+  --color-brand-800: #2f1b53;
+  --color-brand-900: #23143e;
+  --color-brand-red: #de1f27;
 }
 
 body {

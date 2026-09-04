@@ -8,14 +8,17 @@ export default async function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 text-center">
-      <h1 className="text-3xl font-bold text-slate-900">Smart Campus</h1>
+      <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+        Godavari Global University
+      </p>
+      <h1 className="mt-1 text-3xl font-bold text-slate-900">Smart Campus</h1>
       <p className="mt-2 max-w-md text-slate-600">
         One platform for attendance, notes, fees, timetables, and campus life.
       </p>
       <div className="mt-6 flex gap-3">
         <Link
           href="/login"
-          className="rounded-md bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          className="rounded-md bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
           Sign in
         </Link>

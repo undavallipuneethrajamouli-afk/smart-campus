@@ -110,7 +110,7 @@ export function PickupVerifier() {
       </div>
       <button
         onClick={verify}
-        className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+        className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
       >
         Verify
       </button>
