@@ -606,9 +606,29 @@ drop policy if exists "messages_insert" on messages;
 create policy "messages_insert" on messages for insert
   with check (sender_id = auth.uid() and is_conversation_participant(conversation_id));
 
+-- Any participant (not just the sender) may update a message row, but
+-- only to set read_at — a trigger below blocks tampering with content.
 drop policy if exists "messages_update_own" on messages;
 create policy "messages_update_own" on messages for update
   using (is_conversation_participant(conversation_id));
+
+create or replace function prevent_message_content_edit() returns trigger
+language plpgsql as $$
+begin
+  if new.content <> old.content
+    or new.sender_id <> old.sender_id
+    or new.conversation_id <> old.conversation_id
+  then
+    raise exception 'Only read_at may be updated on messages';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists messages_restrict_update on messages;
+create trigger messages_restrict_update
+  before update on messages
+  for each row execute function prevent_message_content_edit();
 
 create index if not exists idx_messages_conversation on messages(conversation_id, created_at);
 create index if not exists idx_canteen_orders_student on canteen_orders(student_id);
