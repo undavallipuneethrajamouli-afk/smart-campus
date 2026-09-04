@@ -13,6 +13,7 @@ export const NAV_ITEMS: Record<AppRole, NavItem[]> = {
     { label: "Timetable", href: "/dashboard/student/timetable" },
     { label: "Fees", href: "/dashboard/student/fees" },
     { label: "Digital ID", href: "/dashboard/student/id" },
+    { label: "AI Helpdesk", href: "/dashboard/student/ai" },
   ],
   FACULTY: [
     { label: "Overview", href: "/dashboard/faculty" },
