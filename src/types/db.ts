@@ -8,6 +8,10 @@ export type AppRole =
   | "ALUMNI";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE";
+export type AnnouncementCategory = "EXAM" | "PLACEMENT" | "NEWS" | "GENERAL";
+export type CanteenOrderStatus = "PLACED" | "PREPARING" | "READY" | "COMPLETED";
+export type LostFoundType = "LOST" | "FOUND";
+export type LostFoundStatus = "OPEN" | "RESOLVED";
 export type FeeType = "TUITION" | "BUS" | "LIBRARY" | "OTHER";
 export type FeeStatus = "PAID" | "PENDING" | "OVERDUE";
 

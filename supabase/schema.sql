@@ -388,3 +388,228 @@ on conflict (id) do nothing;
 drop policy if exists "notes_bucket_insert_faculty" on storage.objects;
 create policy "notes_bucket_insert_faculty" on storage.objects for insert
   with check (bucket_id = 'notes' and auth_role() = 'FACULTY');
+
+-- ============================================================
+-- PHASE 4: Events, Announcements, Canteen, Lost & Found, Chat
+-- ============================================================
+
+do $$ begin
+  create type announcement_category as enum ('EXAM', 'PLACEMENT', 'NEWS', 'GENERAL');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type canteen_order_status as enum ('PLACED', 'PREPARING', 'READY', 'COMPLETED');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type lost_found_type as enum ('LOST', 'FOUND');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type lost_found_status as enum ('OPEN', 'RESOLVED');
+exception when duplicate_object then null; end $$;
+
+-- ---------- Events & Announcements ----------
+create table if not exists events (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  event_date date not null,
+  event_time time,
+  location text,
+  organizer text,
+  created_by uuid not null references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  body text not null,
+  category announcement_category not null default 'GENERAL',
+  created_by uuid not null references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table events enable row level security;
+alter table announcements enable row level security;
+
+drop policy if exists "events_select_all" on events;
+create policy "events_select_all" on events for select using (true);
+
+drop policy if exists "events_write_staff" on events;
+create policy "events_write_staff" on events for all
+  using (auth_role() in ('ADMIN', 'HOD'))
+  with check (auth_role() in ('ADMIN', 'HOD'));
+
+drop policy if exists "announcements_select_all" on announcements;
+create policy "announcements_select_all" on announcements for select using (true);
+
+drop policy if exists "announcements_write_staff" on announcements;
+create policy "announcements_write_staff" on announcements for all
+  using (auth_role() in ('ADMIN', 'HOD'))
+  with check (auth_role() in ('ADMIN', 'HOD'));
+
+-- ---------- Canteen ----------
+create table if not exists canteen_menu (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  price numeric(10, 2) not null,
+  category text,
+  available boolean not null default true
+);
+
+create table if not exists canteen_orders (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  status canteen_order_status not null default 'PLACED',
+  total_amount numeric(10, 2) not null,
+  pickup_code text not null default upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 6)),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists canteen_order_items (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references canteen_orders(id) on delete cascade,
+  menu_item_id uuid not null references canteen_menu(id),
+  quantity int not null check (quantity > 0),
+  price_at_order numeric(10, 2) not null
+);
+
+alter table canteen_menu enable row level security;
+alter table canteen_orders enable row level security;
+alter table canteen_order_items enable row level security;
+
+drop policy if exists "canteen_menu_select_all" on canteen_menu;
+create policy "canteen_menu_select_all" on canteen_menu for select using (true);
+
+drop policy if exists "canteen_menu_write_staff" on canteen_menu;
+create policy "canteen_menu_write_staff" on canteen_menu for all
+  using (auth_role() in ('ADMIN', 'CANTEEN_STAFF'))
+  with check (auth_role() in ('ADMIN', 'CANTEEN_STAFF'));
+
+drop policy if exists "canteen_orders_select" on canteen_orders;
+create policy "canteen_orders_select" on canteen_orders for select
+  using (student_id = auth.uid() or auth_role() in ('ADMIN', 'CANTEEN_STAFF'));
+
+drop policy if exists "canteen_orders_insert_own" on canteen_orders;
+create policy "canteen_orders_insert_own" on canteen_orders for insert
+  with check (student_id = auth.uid() and auth_role() = 'STUDENT');
+
+drop policy if exists "canteen_orders_update_staff" on canteen_orders;
+create policy "canteen_orders_update_staff" on canteen_orders for update
+  using (auth_role() in ('ADMIN', 'CANTEEN_STAFF'));
+
+drop policy if exists "canteen_order_items_select" on canteen_order_items;
+create policy "canteen_order_items_select" on canteen_order_items for select
+  using (
+    auth_role() in ('ADMIN', 'CANTEEN_STAFF')
+    or exists (
+      select 1 from canteen_orders o where o.id = order_id and o.student_id = auth.uid()
+    )
+  );
+
+drop policy if exists "canteen_order_items_insert_own" on canteen_order_items;
+create policy "canteen_order_items_insert_own" on canteen_order_items for insert
+  with check (
+    exists (
+      select 1 from canteen_orders o
+      where o.id = order_id and o.student_id = auth.uid()
+    )
+  );
+
+-- ---------- Lost & Found ----------
+create table if not exists lost_found (
+  id uuid primary key default gen_random_uuid(),
+  type lost_found_type not null,
+  title text not null,
+  description text,
+  location text,
+  item_date date,
+  image_path text,
+  reported_by uuid not null references profiles(id),
+  status lost_found_status not null default 'OPEN',
+  created_at timestamptz not null default now()
+);
+
+alter table lost_found enable row level security;
+
+drop policy if exists "lost_found_select_all" on lost_found;
+create policy "lost_found_select_all" on lost_found for select using (true);
+
+drop policy if exists "lost_found_insert_own" on lost_found;
+create policy "lost_found_insert_own" on lost_found for insert
+  with check (reported_by = auth.uid());
+
+drop policy if exists "lost_found_update_own_or_staff" on lost_found;
+create policy "lost_found_update_own_or_staff" on lost_found for update
+  using (reported_by = auth.uid() or auth_role() in ('ADMIN', 'HOD'));
+
+insert into storage.buckets (id, name, public)
+values ('lost-found', 'lost-found', true)
+on conflict (id) do nothing;
+
+drop policy if exists "lost_found_bucket_insert_own" on storage.objects;
+create policy "lost_found_bucket_insert_own" on storage.objects for insert
+  with check (bucket_id = 'lost-found' and auth.uid() is not null);
+
+drop policy if exists "lost_found_bucket_select_all" on storage.objects;
+create policy "lost_found_bucket_select_all" on storage.objects for select
+  using (bucket_id = 'lost-found');
+
+-- ---------- Faculty-Student Chat ----------
+create table if not exists conversations (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  faculty_id uuid not null references faculty(id),
+  created_at timestamptz not null default now(),
+  unique (student_id, faculty_id)
+);
+
+create table if not exists messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  sender_id uuid not null references profiles(id),
+  content text not null,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
+alter table conversations enable row level security;
+alter table messages enable row level security;
+
+create or replace function is_conversation_participant(p_conversation_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from conversations
+    where id = p_conversation_id
+      and (student_id = auth.uid() or faculty_id = auth.uid())
+  );
+$$;
+
+drop policy if exists "conversations_select" on conversations;
+create policy "conversations_select" on conversations for select
+  using (student_id = auth.uid() or faculty_id = auth.uid() or auth_role() = 'ADMIN');
+
+drop policy if exists "conversations_insert" on conversations;
+create policy "conversations_insert" on conversations for insert
+  with check (
+    (student_id = auth.uid() and auth_role() = 'STUDENT')
+    or (faculty_id = auth.uid() and auth_role() = 'FACULTY')
+  );
+
+drop policy if exists "messages_select" on messages;
+create policy "messages_select" on messages for select
+  using (is_conversation_participant(conversation_id) or auth_role() = 'ADMIN');
+
+drop policy if exists "messages_insert" on messages;
+create policy "messages_insert" on messages for insert
+  with check (sender_id = auth.uid() and is_conversation_participant(conversation_id));
+
+drop policy if exists "messages_update_own" on messages;
+create policy "messages_update_own" on messages for update
+  using (is_conversation_participant(conversation_id));
+
+create index if not exists idx_messages_conversation on messages(conversation_id, created_at);
+create index if not exists idx_canteen_orders_student on canteen_orders(student_id);
+create index if not exists idx_lost_found_status on lost_found(status);
