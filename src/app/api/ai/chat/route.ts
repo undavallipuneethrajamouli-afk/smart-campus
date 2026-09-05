@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth";
 
@@ -8,6 +7,8 @@ You do NOT currently have access to this specific college's official documents, 
 - If asked about this college's specific rules, deadlines, fees, contact details, exam schedules, or any institution-specific fact, say plainly that you don't have that information yet and suggest they check with the relevant department or official notice board. Never invent a specific policy, date, name, or number.
 - For general educational questions (explaining a concept, study help, general academic guidance), answer normally and helpfully using your own knowledge.
 Keep answers concise and clear.`;
+
+const GEMINI_MODEL = "gemini-3.6-flash";
 
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
@@ -21,32 +22,51 @@ export async function POST(request: Request) {
   }
 
   const messages = body.messages.slice(-20).map((m: { role: string; content: string }) => ({
-    role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-    content: String(m.content).slice(0, 4000),
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: String(m.content).slice(0, 4000) }],
   }));
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: "AI Helpdesk is not configured yet — missing ANTHROPIC_API_KEY." },
+      { error: "AI Helpdesk is not configured yet — missing GEMINI_API_KEY." },
       { status: 503 },
     );
   }
 
   try {
-    const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-opus-5",
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      output_config: { effort: "medium" },
-      messages,
-    });
-
-    const textBlock = response.content.find(
-      (b): b is Anthropic.TextBlock => b.type === "text",
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: messages,
+          generationConfig: {
+            maxOutputTokens: 1024,
+            thinkingConfig: { thinkingLevel: "LOW" },
+          },
+        }),
+      },
     );
 
-    return NextResponse.json({ reply: textBlock?.text ?? "" });
+    if (!res.ok) {
+      const errBody = await res.text();
+      return NextResponse.json(
+        { error: `Gemini request failed (${res.status}): ${errBody.slice(0, 300)}` },
+        { status: 502 },
+      );
+    }
+
+    const data = await res.json();
+    const reply: string =
+      data.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ??
+      "";
+
+    return NextResponse.json({ reply });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "AI request failed" },
