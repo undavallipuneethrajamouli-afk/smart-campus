@@ -107,3 +107,109 @@ export interface FeeTransaction {
   method: string;
   status: FeeStatus;
 }
+
+export interface ResumeSkill {
+  name: string;
+}
+
+export interface ResumeProject {
+  title: string;
+  description: string;
+  link: string;
+}
+
+export interface ResumeAchievement {
+  title: string;
+  date: string;
+  description: string;
+}
+
+export interface Resume {
+  student_id: string;
+  headline: string | null;
+  summary: string | null;
+  skills: ResumeSkill[];
+  projects: ResumeProject[];
+  achievements: ResumeAchievement[];
+  updated_at: string;
+}
+
+export interface CampusCoinTransaction {
+  id: string;
+  student_id: string;
+  amount: number;
+  reason: string;
+  awarded_by: string;
+  created_at: string;
+}
+
+export interface Poll {
+  id: string;
+  question: string;
+  options: string[];
+  active: boolean;
+  created_by: string;
+  created_at: string;
+}
+
+export interface PollResponse {
+  id: string;
+  poll_id: string;
+  student_id: string;
+  option_index: number;
+  created_at: string;
+}
+
+export type ProjectStatus = "OPEN" | "CLOSED";
+export type TutoringType = "REQUEST" | "OFFER";
+export type MarketplaceStatus = "AVAILABLE" | "SOLD";
+
+export interface ProjectPost {
+  id: string;
+  title: string;
+  description: string;
+  skills_needed: string | null;
+  posted_by: string;
+  status: ProjectStatus;
+  created_at: string;
+}
+
+export interface TutoringPost {
+  id: string;
+  type: TutoringType;
+  subject: string;
+  description: string | null;
+  posted_by: string;
+  created_at: string;
+}
+
+export interface TransportRoute {
+  id: string;
+  name: string;
+  bus_number: string;
+  driver_id: string | null;
+  stops: string | null;
+  active: boolean;
+  created_at: string;
+}
+
+export interface BoardingRecord {
+  id: string;
+  student_id: string;
+  route_id: string;
+  boarded_at: string;
+  verified_by: string;
+}
+
+export interface MarketplaceListing {
+  id: string;
+  title: string;
+  description: string | null;
+  price: number;
+  category: string;
+  condition: string | null;
+  image_path: string | null;
+  seller_id: string;
+  status: MarketplaceStatus;
+  created_at: string;
+}

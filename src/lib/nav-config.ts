@@ -18,6 +18,12 @@ export const NAV_ITEMS: Record<AppRole, NavItem[]> = {
     { label: "Canteen", href: "/dashboard/student/canteen" },
     { label: "Lost & Found", href: "/dashboard/student/lost-found" },
     { label: "Messages", href: "/dashboard/student/messages" },
+    { label: "Resume Builder", href: "/dashboard/student/resume" },
+    { label: "Marketplace", href: "/dashboard/student/marketplace" },
+    { label: "Projects & Tutoring", href: "/dashboard/student/projects" },
+    { label: "Campus Coins", href: "/dashboard/student/coins" },
+    { label: "Polls", href: "/dashboard/student/polls" },
+    { label: "Transport", href: "/dashboard/student/transport" },
   ],
   FACULTY: [
     { label: "Overview", href: "/dashboard/faculty" },
@@ -39,6 +45,9 @@ export const NAV_ITEMS: Record<AppRole, NavItem[]> = {
     { label: "Events & News", href: "/dashboard/admin/events" },
     { label: "Departments", href: "/dashboard/admin/departments" },
     { label: "Analytics", href: "/dashboard/admin/analytics" },
+    { label: "Campus Coins", href: "/dashboard/admin/coins" },
+    { label: "Polls", href: "/dashboard/admin/polls" },
+    { label: "Transport", href: "/dashboard/admin/transport" },
   ],
   BUS_DRIVER: [{ label: "Overview", href: "/dashboard/driver" }],
   CANTEEN_STAFF: [

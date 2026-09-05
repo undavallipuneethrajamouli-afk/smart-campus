@@ -16,7 +16,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex">
-      <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white md:block">
+      <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white md:block print:hidden">
         <div className="border-b border-slate-200 bg-brand-600 px-5 py-4">
           <p className="text-sm font-semibold text-white">Smart Campus</p>
           <p className="mt-0.5 text-xs text-brand-100">Godavari Global University</p>
@@ -28,7 +28,7 @@ export default async function DashboardLayout({
       </aside>
 
       <div className="flex-1">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:px-6">
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:px-6 print:hidden">
           <MobileNavLinks items={items} />
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden text-sm text-slate-600 sm:inline">{profile.full_name}</span>

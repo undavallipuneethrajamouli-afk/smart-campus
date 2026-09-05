@@ -286,7 +286,10 @@ create policy "faculty_insert_own" on faculty for insert
 -- qr_identities: only the owner (or staff, for verification) can read.
 drop policy if exists "qr_select_own_or_staff" on qr_identities;
 create policy "qr_select_own_or_staff" on qr_identities for select
-  using (profile_id = auth.uid() or auth_role() in ('ADMIN', 'HOD', 'FACULTY'));
+  using (
+    profile_id = auth.uid()
+    or auth_role() in ('ADMIN', 'HOD', 'FACULTY', 'BUS_DRIVER', 'CANTEEN_STAFF')
+  );
 
 -- enrollments: student sees own; staff sees all.
 drop policy if exists "enrollments_select" on enrollments;
@@ -655,3 +658,268 @@ create trigger messages_restrict_update
 create index if not exists idx_messages_conversation on messages(conversation_id, created_at);
 create index if not exists idx_canteen_orders_student on canteen_orders(student_id);
 create index if not exists idx_lost_found_status on lost_found(status);
+
+-- ============================================================
+-- RESUME BUILDER
+-- One draft per student. Skills/projects/achievements are freeform,
+-- ordered, owner-only lists, so a JSONB array is a better fit here than
+-- three extra join tables — Postgres still validates/queries it fine.
+-- ============================================================
+create table if not exists resumes (
+  student_id uuid primary key references students(id) on delete cascade,
+  headline text,
+  summary text,
+  skills jsonb not null default '[]'::jsonb,
+  projects jsonb not null default '[]'::jsonb,
+  achievements jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table resumes enable row level security;
+
+drop policy if exists "resumes_all_own" on resumes;
+create policy "resumes_all_own" on resumes for all
+  using (student_id = auth.uid())
+  with check (student_id = auth.uid());
+
+-- ============================================================
+-- CAMPUS COINS
+-- Balance is derived (sum of transactions), never stored directly, so
+-- there is no balance column a student could ever write to themselves.
+-- ============================================================
+create table if not exists campus_coin_transactions (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id) on delete cascade,
+  amount int not null,
+  reason text not null,
+  awarded_by uuid not null references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table campus_coin_transactions enable row level security;
+
+drop policy if exists "coins_select" on campus_coin_transactions;
+create policy "coins_select" on campus_coin_transactions for select
+  using (student_id = auth.uid() or auth_role() in ('ADMIN', 'HOD'));
+
+drop policy if exists "coins_insert_admin" on campus_coin_transactions;
+create policy "coins_insert_admin" on campus_coin_transactions for insert
+  with check (auth_role() = 'ADMIN' and awarded_by = auth.uid());
+
+-- ============================================================
+-- POLLS
+-- ============================================================
+create table if not exists polls (
+  id uuid primary key default gen_random_uuid(),
+  question text not null,
+  options jsonb not null,
+  active boolean not null default true,
+  created_by uuid not null references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists poll_responses (
+  id uuid primary key default gen_random_uuid(),
+  poll_id uuid not null references polls(id) on delete cascade,
+  student_id uuid not null references students(id) on delete cascade,
+  option_index int not null,
+  created_at timestamptz not null default now(),
+  unique (poll_id, student_id)
+);
+
+alter table polls enable row level security;
+alter table poll_responses enable row level security;
+
+drop policy if exists "polls_select_all" on polls;
+create policy "polls_select_all" on polls for select using (true);
+
+drop policy if exists "polls_insert_admin" on polls;
+create policy "polls_insert_admin" on polls for insert
+  with check (auth_role() = 'ADMIN' and created_by = auth.uid());
+
+drop policy if exists "poll_responses_select_all" on poll_responses;
+create policy "poll_responses_select_all" on poll_responses for select using (true);
+
+drop policy if exists "poll_responses_insert_own" on poll_responses;
+create policy "poll_responses_insert_own" on poll_responses for insert
+  with check (student_id = auth.uid() and auth_role() = 'STUDENT');
+
+-- ============================================================
+-- PROJECT MATCHMAKING & TUTORING
+-- ============================================================
+do $$ begin
+  create type project_status as enum ('OPEN', 'CLOSED');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type tutoring_type as enum ('REQUEST', 'OFFER');
+exception when duplicate_object then null; end $$;
+
+create table if not exists projects (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text not null,
+  skills_needed text,
+  posted_by uuid not null references profiles(id),
+  status project_status not null default 'OPEN',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists tutoring (
+  id uuid primary key default gen_random_uuid(),
+  type tutoring_type not null,
+  subject text not null,
+  description text,
+  posted_by uuid not null references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table projects enable row level security;
+alter table tutoring enable row level security;
+
+drop policy if exists "projects_select_all" on projects;
+create policy "projects_select_all" on projects for select using (true);
+
+drop policy if exists "projects_insert_own" on projects;
+create policy "projects_insert_own" on projects for insert
+  with check (posted_by = auth.uid());
+
+drop policy if exists "projects_update_own" on projects;
+create policy "projects_update_own" on projects for update
+  using (posted_by = auth.uid());
+
+drop policy if exists "tutoring_select_all" on tutoring;
+create policy "tutoring_select_all" on tutoring for select using (true);
+
+drop policy if exists "tutoring_insert_own" on tutoring;
+create policy "tutoring_insert_own" on tutoring for insert
+  with check (posted_by = auth.uid());
+
+drop policy if exists "tutoring_delete_own" on tutoring;
+create policy "tutoring_delete_own" on tutoring for delete
+  using (posted_by = auth.uid());
+
+-- ============================================================
+-- CAMPUS MARKETPLACE
+-- ============================================================
+do $$ begin
+  create type marketplace_status as enum ('AVAILABLE', 'SOLD');
+exception when duplicate_object then null; end $$;
+
+create table if not exists marketplace_listings (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  price numeric(10, 2) not null,
+  category text not null,
+  condition text,
+  image_path text,
+  seller_id uuid not null references profiles(id),
+  status marketplace_status not null default 'AVAILABLE',
+  created_at timestamptz not null default now()
+);
+
+alter table marketplace_listings enable row level security;
+
+drop policy if exists "marketplace_select_all" on marketplace_listings;
+create policy "marketplace_select_all" on marketplace_listings for select using (true);
+
+drop policy if exists "marketplace_insert_own" on marketplace_listings;
+create policy "marketplace_insert_own" on marketplace_listings for insert
+  with check (seller_id = auth.uid());
+
+drop policy if exists "marketplace_update_own" on marketplace_listings;
+create policy "marketplace_update_own" on marketplace_listings for update
+  using (seller_id = auth.uid());
+
+insert into storage.buckets (id, name, public)
+values ('marketplace', 'marketplace', true)
+on conflict (id) do nothing;
+
+drop policy if exists "marketplace_bucket_insert_own" on storage.objects;
+create policy "marketplace_bucket_insert_own" on storage.objects for insert
+  with check (bucket_id = 'marketplace' and auth.uid() is not null);
+
+drop policy if exists "marketplace_bucket_select_all" on storage.objects;
+create policy "marketplace_bucket_select_all" on storage.objects for select
+  using (bucket_id = 'marketplace');
+
+-- ============================================================
+-- TRANSPORT
+-- MVP simplification: route/stop info is static data admins enter, not
+-- live GPS. Never presented as real-time tracking (per the project spec).
+-- ============================================================
+create table if not exists transport_routes (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  bus_number text not null,
+  driver_id uuid references profiles(id),
+  stops text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists transport_assignments (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id) on delete cascade,
+  route_id uuid not null references transport_routes(id) on delete cascade,
+  unique (student_id, route_id)
+);
+
+create table if not exists boarding_records (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  route_id uuid not null references transport_routes(id),
+  boarded_at timestamptz not null default now(),
+  verified_by uuid not null references profiles(id)
+);
+
+alter table transport_routes enable row level security;
+alter table transport_assignments enable row level security;
+alter table boarding_records enable row level security;
+
+drop policy if exists "transport_routes_select_all" on transport_routes;
+create policy "transport_routes_select_all" on transport_routes for select using (true);
+
+drop policy if exists "transport_routes_write_admin" on transport_routes;
+create policy "transport_routes_write_admin" on transport_routes for all
+  using (auth_role() = 'ADMIN')
+  with check (auth_role() = 'ADMIN');
+
+drop policy if exists "transport_assignments_select" on transport_assignments;
+create policy "transport_assignments_select" on transport_assignments for select
+  using (
+    student_id = auth.uid()
+    or auth_role() = 'ADMIN'
+    or exists (
+      select 1 from transport_routes r
+      where r.id = route_id and r.driver_id = auth.uid()
+    )
+  );
+
+drop policy if exists "transport_assignments_write_admin" on transport_assignments;
+create policy "transport_assignments_write_admin" on transport_assignments for all
+  using (auth_role() = 'ADMIN')
+  with check (auth_role() = 'ADMIN');
+
+drop policy if exists "boarding_records_select" on boarding_records;
+create policy "boarding_records_select" on boarding_records for select
+  using (
+    student_id = auth.uid()
+    or auth_role() = 'ADMIN'
+    or exists (
+      select 1 from transport_routes r
+      where r.id = route_id and r.driver_id = auth.uid()
+    )
+  );
+
+drop policy if exists "boarding_records_insert_driver" on boarding_records;
+create policy "boarding_records_insert_driver" on boarding_records for insert
+  with check (
+    verified_by = auth.uid()
+    and auth_role() = 'BUS_DRIVER'
+    and exists (
+      select 1 from transport_routes r
+      where r.id = route_id and r.driver_id = auth.uid()
+    )
+  );
