@@ -28,6 +28,29 @@ export function TransportManager({
   const [assignRouteId, setAssignRouteId] = useState(routes[0]?.id ?? "");
   const [assignStudentId, setAssignStudentId] = useState(students[0]?.id ?? "");
 
+  // routes/drivers arrive as server props and change after router.refresh()
+  // (e.g. right after adding the first route) — useState's initial value
+  // only applies at mount. Re-sync during render (React's documented
+  // pattern for adjusting state from changed props) rather than in an
+  // effect, since this was previously a silent no-op bug: an empty
+  // assignRouteId failed the guard clause in handleAssign with no visible
+  // error, even though the dropdown appeared to show a selection.
+  const [prevRoutes, setPrevRoutes] = useState(routes);
+  if (routes !== prevRoutes) {
+    setPrevRoutes(routes);
+    if (!routes.find((r) => r.id === assignRouteId)) {
+      setAssignRouteId(routes[0]?.id ?? "");
+    }
+  }
+
+  const [prevDrivers, setPrevDrivers] = useState(drivers);
+  if (drivers !== prevDrivers) {
+    setPrevDrivers(drivers);
+    if (!drivers.find((d) => d.id === driverId)) {
+      setDriverId(drivers[0]?.id ?? "");
+    }
+  }
+
   async function handleAddRoute() {
     if (!name || !busNumber) {
       setError("Enter a route name and bus number.");
@@ -51,7 +74,11 @@ export function TransportManager({
   }
 
   async function handleAssign() {
-    if (!assignRouteId || !assignStudentId) return;
+    if (!assignRouteId || !assignStudentId) {
+      setError("Select a route and a student first.");
+      return;
+    }
+    setError(null);
     const supabase = createClient();
     const { error } = await supabase.from("transport_assignments").insert({
       student_id: assignStudentId,
